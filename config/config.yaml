@@ -1,0 +1,63 @@
+app:
+  name: "Trivia Shorts Factory"
+  output_dir: "./output"
+  assets_dir: "./assets"
+  db_path: "./data/trivia_shorts.db"
+  max_videos_per_day: 10
+
+tts:
+  engine: "voicevox"
+  voicevox_url: "http://localhost:50021"
+  speaker_id: 1
+  speed_scale: 1.0
+
+video:
+  width: 1080
+  height: 1920
+  fps: 30
+  max_duration_sec: 60
+  font: "NotoSansJP-Bold.ttf"
+  font_size: 48
+  transition: "crossfade"
+  transition_duration_ms: 500
+
+ai:
+  provider: "anthropic"
+  model: "claude-sonnet-4-20250514"
+  max_tokens: 4096
+
+trend_sources:
+  twitter:
+    enabled: true
+    woeid: 23424856
+  google_trends:
+    enabled: true
+    geo: "JP"
+  youtube:
+    enabled: true
+    region_code: "JP"
+
+image_sources:
+  - name: "unsplash"
+    api_key_env: "UNSPLASH_API_KEY"
+    priority: 1
+  - name: "pexels"
+    api_key_env: "PEXELS_API_KEY"
+    priority: 2
+  - name: "pixabay"
+    api_key_env: "PIXABAY_API_KEY"
+    priority: 3
+
+youtube:
+  credentials_path: "./credentials/youtube_oauth.json"
+  default_privacy: "private"
+  default_category: "27"
+
+fact_check:
+  min_sources: 3
+  min_reliability_score: 15
+  source_weights:
+    academic: 10
+    wikipedia: 8
+    government: 8
+    web: 5

@@ -1,0 +1,60 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "trivia-shorts-factory"
+version = "0.1.0"
+description = "Trivia Shorts Factory - 雑学ショート動画自動生成パイプライン"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+
+dependencies = [
+    # Core
+    "pyyaml>=6.0",
+    "python-dotenv>=1.0",
+    "pydantic>=2.0",
+    "pydantic-settings>=2.0",
+    # CLI
+    "click>=8.0",
+    # AI
+    "anthropic>=0.40",
+    # Trend sources
+    "pytrends>=4.9",
+    "tweepy>=4.14",
+    # Web search
+    "requests>=2.31",
+    "httpx>=0.27",
+    # Image processing
+    "Pillow>=10.0",
+    # GUI
+    "PyQt6>=6.6",
+    "PyQt6-WebEngine>=6.6",
+    # YouTube
+    "google-api-python-client>=2.100",
+    "google-auth-oauthlib>=1.1",
+    "google-auth-httplib2>=0.2",
+    # Database
+    "aiosqlite>=0.19",
+    # Utilities
+    "rich>=13.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-qt>=4.0",
+    "pytest-asyncio>=0.21",
+    "ruff>=0.1",
+]
+
+[project.scripts]
+trivia-shorts = "src.main:cli"
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
