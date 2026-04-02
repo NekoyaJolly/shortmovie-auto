@@ -1,4 +1,8 @@
-"""Web検索・学術検索クライアント"""
+"""Web検索・学術検索クライアント
+
+Google Custom Search API は新規取得不可のため、
+DuckDuckGo Search (duckduckgo-search) をメインのWeb検索として使用。
+"""
 
 from __future__ import annotations
 
@@ -7,8 +11,6 @@ import time
 from dataclasses import dataclass
 
 import requests
-
-from src.config import get_env
 
 logger = logging.getLogger(__name__)
 
@@ -83,59 +85,64 @@ class WikipediaClient:
         return None
 
 
-class GoogleCustomSearchClient:
-    """Google Custom Search API"""
+class DuckDuckGoSearchClient:
+    """duckduckgo-search ライブラリによるWeb検索（メイン検索エンジン）
 
-    def __init__(self) -> None:
-        self.api_key = get_env("GOOGLE_CUSTOM_SEARCH_API_KEY")
-        self.cx = get_env("GOOGLE_CUSTOM_SEARCH_CX")
+    APIキー不要。Google Custom Search の代替。
+    """
 
-    def search(self, query: str, num: int = 10) -> list[SearchResult]:
-        if not self.api_key or not self.cx:
-            logger.warning("Google Custom Search API キーが未設定")
-            return []
+    def search(self, query: str, max_results: int = 10, region: str = "jp-jp") -> list[SearchResult]:
+        """DuckDuckGoでWeb検索"""
+        try:
+            from ddgs import DDGS
 
-        url = "https://www.googleapis.com/customsearch/v1"
-        params = {
-            "key": self.api_key,
-            "cx": self.cx,
-            "q": query,
-            "num": min(num, 10),
-            "lr": "lang_ja",
-        }
-
-        for attempt in range(MAX_RETRIES):
-            try:
-                resp = requests.get(url, params=params, timeout=15)
-                if resp.status_code == 429:
-                    time.sleep(2 ** (attempt + 1))
-                    continue
-                resp.raise_for_status()
-                data = resp.json()
-
-                results = []
-                for item in data.get("items", []):
-                    url_str = item.get("link", "")
-                    source_type = _classify_source(url_str)
+            results = []
+            with DDGS() as ddgs:
+                for r in ddgs.text(query, region=region, max_results=max_results):
+                    url_str = r.get("href", "")
                     results.append(
                         SearchResult(
-                            title=item.get("title", ""),
+                            title=r.get("title", ""),
                             url=url_str,
-                            snippet=item.get("snippet", ""),
-                            source_type=source_type,
+                            snippet=r.get("body", ""),
+                            source_type=_classify_source(url_str),
                         )
                     )
-                return results
-            except Exception as e:
-                logger.error("Google検索エラー (試行 %d): %s", attempt + 1, e)
-                if attempt < MAX_RETRIES - 1:
-                    time.sleep(2 ** (attempt + 1))
 
-        return []
+            logger.info("DuckDuckGo検索: '%s' → %d件", query[:40], len(results))
+            return results
+
+        except ImportError:
+            logger.error("ddgs がインストールされていません: pip install ddgs")
+            return []
+        except Exception as e:
+            logger.error("DuckDuckGo検索エラー: %s", e)
+            # レート制限時はリトライ
+            if "ratelimit" in str(e).lower():
+                logger.info("レート制限検出。5秒後にリトライ...")
+                time.sleep(5)
+                try:
+                    from ddgs import DDGS
+                    results = []
+                    with DDGS() as ddgs:
+                        for r in ddgs.text(query, region=region, max_results=max_results):
+                            url_str = r.get("href", "")
+                            results.append(
+                                SearchResult(
+                                    title=r.get("title", ""),
+                                    url=url_str,
+                                    snippet=r.get("body", ""),
+                                    source_type=_classify_source(url_str),
+                                )
+                            )
+                    return results
+                except Exception:
+                    pass
+            return []
 
 
-class DuckDuckGoClient:
-    """DuckDuckGo Instant Answer API（フォールバック）"""
+class DuckDuckGoInstantClient:
+    """DuckDuckGo Instant Answer API（補助用）"""
 
     def search(self, query: str) -> list[SearchResult]:
         url = "https://api.duckduckgo.com/"
@@ -147,7 +154,6 @@ class DuckDuckGoClient:
             data = resp.json()
 
             results = []
-            # Abstract（メイン結果）
             if data.get("Abstract"):
                 results.append(
                     SearchResult(
@@ -157,7 +163,6 @@ class DuckDuckGoClient:
                         source_type=_classify_source(data.get("AbstractURL", "")),
                     )
                 )
-            # Related Topics
             for topic in data.get("RelatedTopics", [])[:5]:
                 if isinstance(topic, dict) and topic.get("Text"):
                     results.append(
@@ -170,7 +175,7 @@ class DuckDuckGoClient:
                     )
             return results
         except Exception as e:
-            logger.error("DuckDuckGo検索エラー: %s", e)
+            logger.error("DuckDuckGo Instant Answer エラー: %s", e)
             return []
 
 

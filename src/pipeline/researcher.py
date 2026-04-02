@@ -9,8 +9,8 @@ from src.config import get_settings
 from src.database import insert_research
 from src.services.ai_client import AIClient
 from src.services.search_client import (
-    DuckDuckGoClient,
-    GoogleCustomSearchClient,
+    DuckDuckGoInstantClient,
+    DuckDuckGoSearchClient,
     SearchResult,
     WikipediaClient,
 )
@@ -89,14 +89,14 @@ def _collect_search_results(keyword: str) -> list[SearchResult]:
     all_results.extend(wiki.search(keyword, lang="ja", limit=3))
     all_results.extend(wiki.search(keyword, lang="en", limit=2))
 
-    # Google Custom Search
-    google = GoogleCustomSearchClient()
-    all_results.extend(google.search(f"{keyword} 雑学 豆知識", num=5))
+    # DuckDuckGo Web検索（メイン）
+    ddg = DuckDuckGoSearchClient()
+    all_results.extend(ddg.search(f"{keyword} 雑学 豆知識", max_results=8))
 
-    # DuckDuckGo（フォールバック）
+    # DuckDuckGo Instant Answer（補助）
     if len(all_results) < 5:
-        ddg = DuckDuckGoClient()
-        all_results.extend(ddg.search(f"{keyword} trivia facts"))
+        instant = DuckDuckGoInstantClient()
+        all_results.extend(instant.search(f"{keyword} trivia facts"))
 
     return all_results
 
@@ -145,9 +145,9 @@ def _verify_fact(
     statement: str, keyword: str, ai_client: AIClient
 ) -> tuple[bool, str, list[SearchResult]]:
     """個別の雑学を検索で検証"""
-    # 検証用検索
-    google = GoogleCustomSearchClient()
-    verify_results = google.search(f"{keyword} {statement[:30]}", num=5)
+    # 検証用検索（DuckDuckGo + Wikipedia）
+    ddg = DuckDuckGoSearchClient()
+    verify_results = ddg.search(f"{keyword} {statement[:30]}", max_results=5)
 
     wiki = WikipediaClient()
     verify_results.extend(wiki.search(f"{keyword} {statement[:20]}", lang="ja", limit=2))
