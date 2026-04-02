@@ -3,8 +3,12 @@
 from __future__ import annotations
 
 import logging
+import os
 import sys
 from pathlib import Path
+
+# Qt6マルチメディア: FFmpegバックエンドを使用（Windows D3Dレンダラーの黒画面回避）
+os.environ.setdefault("QT_MULTIMEDIA_PREFERRED_PLUGINS", "ffmpeg")
 
 import click
 

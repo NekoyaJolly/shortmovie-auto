@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PyQt6.QtCore import QUrl, pyqtSignal
-from PyQt6.QtMultimedia import QAudioOutput, QMediaPlayer
-from PyQt6.QtMultimediaWidgets import QVideoWidget
+from PyQt6.QtCore import Qt, QUrl, pyqtSignal
+from PyQt6.QtGui import QImage, QPixmap
+from PyQt6.QtMultimedia import QAudioOutput, QMediaPlayer, QVideoFrame, QVideoSink
 from PyQt6.QtWidgets import (
     QGroupBox,
     QHBoxLayout,
@@ -25,7 +25,7 @@ from src.database import approve_video, reject_video, update_video
 class PreviewPanel(QWidget):
     """動画プレビュー・メタデータ編集パネル"""
 
-    video_updated = pyqtSignal()  # 動画ステータスが変わったことを通知
+    video_updated = pyqtSignal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -36,15 +36,21 @@ class PreviewPanel(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(8, 8, 8, 8)
 
-        # --- プレビューエリア ---
-        self.video_widget = QVideoWidget()
-        self.video_widget.setMinimumHeight(320)
-        layout.addWidget(self.video_widget)
+        # --- プレビューエリア（QLabel + QVideoSink でCPU描画）---
+        self.video_label = QLabel()
+        self.video_label.setMinimumHeight(280)
+        self.video_label.setMaximumHeight(320)
+        self.video_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.video_label.setStyleSheet("background-color: black;")
+        layout.addWidget(self.video_label, stretch=0)
 
         self.player = QMediaPlayer()
         self.audio_output = QAudioOutput()
         self.player.setAudioOutput(self.audio_output)
-        self.player.setVideoOutput(self.video_widget)
+
+        self.video_sink = QVideoSink()
+        self.video_sink.videoFrameChanged.connect(self._on_frame)
+        self.player.setVideoSink(self.video_sink)
 
         # 再生コントロール
         controls = QHBoxLayout()
@@ -107,23 +113,38 @@ class PreviewPanel(QWidget):
 
         layout.addLayout(btn_layout)
 
+    def _on_frame(self, frame: QVideoFrame) -> None:
+        """動画フレームをQLabelに描画"""
+        if not frame.isValid():
+            return
+        img = frame.toImage()
+        if img.isNull():
+            return
+        img = img.convertToFormat(QImage.Format.Format_RGB32)
+        pixmap = QPixmap.fromImage(img).scaled(
+            self.video_label.width(),
+            self.video_label.height(),
+            Qt.AspectRatioMode.KeepAspectRatio,
+            Qt.TransformationMode.SmoothTransformation,
+        )
+        self.video_label.setPixmap(pixmap)
+
     def load_video(self, video: dict) -> None:
         """動画データをパネルに読み込み"""
         self.current_video = video
 
-        # プレビュー
         video_path = video.get("video_path")
         if video_path and Path(video_path).exists():
             self.player.setSource(QUrl.fromLocalFile(str(Path(video_path).resolve())))
+            self.player.play()
+            self.play_btn.setText("一時停止")
 
-        # メタデータ
         meta = video.get("metadata_json", {}) or {}
         self.title_edit.setText(meta.get("title", ""))
         self.desc_edit.setPlainText(meta.get("description", ""))
         tags = meta.get("tags", [])
         self.tags_edit.setText(", ".join(tags) if isinstance(tags, list) else "")
 
-        # 情報
         self.score_label.setText(f"信頼度スコア: {meta.get('fact_check_score', '-')}")
         self.status_label.setText(f"ステータス: {video.get('status', '-')}")
 
@@ -142,12 +163,10 @@ class PreviewPanel(QWidget):
     def _save_metadata(self) -> None:
         if not self.current_video:
             return
-
         meta = self.current_video.get("metadata_json", {}) or {}
         meta["title"] = self.title_edit.text()
         meta["description"] = self.desc_edit.toPlainText()
         meta["tags"] = [t.strip() for t in self.tags_edit.text().split(",") if t.strip()]
-
         update_video(self.current_video["id"], metadata_json=meta)
         QMessageBox.information(self, "保存", "メタデータを保存しました。")
 
